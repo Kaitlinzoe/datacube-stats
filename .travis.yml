@@ -52,13 +52,13 @@ after_success:
 before_deploy:
   - pip install s3pypi
   - python setup.py sdist --dist-dir dist/$TRAVIS_PYTHON_VERSION
-  - DEPLOY_PATH=$TRAVIS_REPO_SLUG/${TRAVIS_TAG:-$TRAVIS_BRANCH}  # eg GeoscienceAustralia/agdc_statistics
+  - DEPLOY_PATH=$TRAVIS_REPO_SLUG/${TRAVIS_TAG:-$TRAVIS_BRANCH}  # eg GeoscienceAustralia/datacube-stats
 
 # On success, upload a package to an S3 Bucket. Used for continuous deployment.
 deploy:
   # Deploy the source dist tarball to s3 for tags or the develop branch, so that it can be installed on other systems
-  # For tags, the object will be GeoscienceAustralia/agdc_statistics/
-  # For develop, the object will be GeoscienceAustralia/agdc_statistics/master/
+  # For tags, the object will be GeoscienceAustralia/datacube-statsdatacube-stats/
+  # For develop, the object will be GeoscienceAustralia/datacube-statsdatacube-stats/master/
   - provider: s3
     access_key_id: "AKIAJMZN4F5L5KXPQKVQ"
     secret_access_key:
