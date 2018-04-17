@@ -50,6 +50,7 @@ after_success:
   - bash <(curl -s https://codecov.io/bash)
 
 before_deploy:
+  - pip install s3pypi
   - python setup.py sdist --dist-dir dist/$TRAVIS_PYTHON_VERSION
   - DEPLOY_PATH=$TRAVIS_REPO_SLUG/${TRAVIS_TAG:-$TRAVIS_BRANCH}  # eg GeoscienceAustralia/agdc_statistics
 
@@ -72,6 +73,11 @@ deploy:
       condition: $TRAVIS_BRANCH = "master" || ! -z "${TRAVIS_TAG}"  # master branch or tags
       repo: GeoscienceAustralia/datacube-stats
       python: "3.6"
+  - provider: script
+    script: s3pypi --bucket datacube-core-deployment
+    on:
+      all_branches: true  # Let the condition below decide if the branch is to be deployed
+      condition: $TRAVIS_BRANCH = "develop" || ! -z "${TRAVIS_TAG}"  # develop branch or tags
 
 notifications:
   slack:
