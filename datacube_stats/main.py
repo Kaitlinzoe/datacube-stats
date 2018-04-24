@@ -127,51 +127,56 @@ def gather_tile_indexes(tile_index, tile_index_file):
 def main(index, stats_config_file, qsub, runner, save_tasks, load_tasks,
          tile_index, tile_index_file, output_location, year, task_slice, batch):
 
-    if qsub is not None and batch is not None:
-        for i in range(batch):
-            child = qsub.clone()
-            child.reset_internal_args()
-            child.add_internal_args('--task-slice', '{}::{}'.format(i, batch))
-            click.echo(repr(child))
-            exit_code, _ = child(auto=True, auto_clean=[('--batch', 1)])
-            if exit_code != 0:
-                return exit_code
-        return 0
+    try:
+        _log_setup()
 
-    elif qsub is not None:
-        # TODO: verify config before calling qsub submit
-        click.echo(repr(qsub))
-        exit_code, _ = qsub(auto=True)
-        return exit_code
+        if qsub is not None and batch is not None:
+            for i in range(batch):
+                child = qsub.clone()
+                child.reset_internal_args()
+                child.add_internal_args('--task-slice', '{}::{}'.format(i, batch))
+                click.echo(repr(child))
+                exit_code, _ = child(auto=True, auto_clean=[('--batch', 1)])
+                if exit_code != 0:
+                    return exit_code
+            return 0
+    
+        elif qsub is not None:
+            # TODO: verify config before calling qsub submit
+            click.echo(repr(qsub))
+            exit_code, _ = qsub(auto=True)
+            return exit_code
+    
+        timer = MultiTimer().start('main')
+    
+        if len(tile_index) == 0:
+            tile_index = None
+    
+        _, config = next(read_documents(stats_config_file))
+        stats_schema(config)
+    
+        app = StatsApp.from_configuration_file(config, index,
+                                               gather_tile_indexes(tile_index, tile_index_file),
+                                               output_location, year)
+        app.validate()
+    
+        if save_tasks:
+            app.save_tasks_to_file(save_tasks)
+            failed = 0
+        elif load_tasks:
+            successful, failed = app.run(runner, task_file=load_tasks, task_slice=task_slice)
+        else:
+            successful, failed = app.run(runner, task_slice=task_slice)
+    
+        timer.pause('main')
+        _LOG.info('Stats processing completed in %s seconds.', timer.run_times['main'])
+    
+        if failed > 0:
+            raise click.ClickException('%s of %s tasks were not completed successfully.' % (failed, successful + failed))
 
-    _log_setup()
-
-    timer = MultiTimer().start('main')
-
-    if len(tile_index) == 0:
-        tile_index = None
-
-    _, config = next(read_documents(stats_config_file))
-    stats_schema(config)
-
-    app = StatsApp.from_configuration_file(config, index,
-                                           gather_tile_indexes(tile_index, tile_index_file),
-                                           output_location, year)
-    app.validate()
-
-    if save_tasks:
-        app.save_tasks_to_file(save_tasks)
-        failed = 0
-    elif load_tasks:
-        successful, failed = app.run(runner, task_file=load_tasks, task_slice=task_slice)
-    else:
-        successful, failed = app.run(runner, task_slice=task_slice)
-
-    timer.pause('main')
-    _LOG.info('Stats processing completed in %s seconds.', timer.run_times['main'])
-
-    if failed > 0:
-        raise click.ClickException('%s of %s tasks were not completed successfully.' % (failed, successful + failed))
+    except Exception as e:
+        _LOG.error(e)
+        return 1
 
     return 0
 
