@@ -8,6 +8,8 @@ from __future__ import absolute_import, print_function
 
 import copy
 import logging
+import sys
+
 from functools import partial
 from itertools import islice
 from textwrap import dedent
@@ -177,7 +179,7 @@ def main(index, stats_config_file, qsub, runner, save_tasks, load_tasks,
 
     except Exception as e:
         _LOG.error(e)
-        return 1
+        sys.exit(1)
 
     return 0
 
