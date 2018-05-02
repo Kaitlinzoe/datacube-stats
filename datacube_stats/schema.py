@@ -115,7 +115,7 @@ computation_schema = Schema({
 })
 
 stats_schema = Schema({
-    'date_ranges': date_ranges_schema,
+    'date_ranges': Any(date_ranges_schema, All([date_ranges_schema], Length(min=1))),
     'location': str,
     'sources': All([source_schema], Length(min=1)),
     'storage': storage_schema,

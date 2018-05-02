@@ -271,7 +271,9 @@ class StatsApp(object):  # pylint: disable=too-many-instance-attributes
         #: Generates tasks to compute statistics. These tasks should be :class:`StatsTask` objects
         #: and will define spatial and temporal boundaries, as well as statistical operations to be run.
         self.task_generator = select_task_generator(config['input_region'],
-                                                    self.storage, self.filter_product)
+                                                    self.storage,
+                                                    self.filter_product,
+                                                    self.date_ranges)
 
         #: A class which knows how to create and write out data to a permanent storage format.
         #: Implements :class:`.output_drivers.OutputDriver`.
@@ -844,34 +846,45 @@ def _configure_date_ranges(index, config):
         This will produce 4 x quarterly statistics from the year 2010.
         """))
     date_ranges = config['date_ranges']
-    if 'start_date' not in date_ranges or 'end_date' not in date_ranges:
+
+    def valid_date(dr):
+        return 'start_date' in dr and 'end_date' in dr
+
+    if not all([valid_date(dr) for dr in date_ranges]):
         raise StatsConfigurationError("Must specified both `start_date` and `end_date`"
                                       " in `date_ranges:` section of configuration")
 
-    if 'stats_duration' not in date_ranges and 'step_size' not in date_ranges:
-        start = pd.to_datetime(date_ranges['start_date'])
-        end = pd.to_datetime(date_ranges['end_date'])
-        output = [(start, end)]
+    def parse(dr):
+        if 'stats_duration' not in dr and 'step_size' not in dr:
+            start = pd.to_datetime(dr['start_date'])
+            end = pd.to_datetime(dr['end_date'])
+            output = [(start, end)]
 
-    elif date_ranges.get('type', 'simple') == 'simple':
-        output = list(date_sequence(start=pd.to_datetime(date_ranges['start_date']),
-                                    end=pd.to_datetime(date_ranges['end_date']),
-                                    stats_duration=date_ranges['stats_duration'],
-                                    step_size=date_ranges['step_size']))
+        elif dr.get('type', 'simple') == 'simple':
+            output = list(date_sequence(start=pd.to_datetime(dr['start_date']),
+                                        end=pd.to_datetime(dr['end_date']),
+                                        stats_duration=dr['stats_duration'],
+                                        step_size=dr['step_size']))
 
-    elif date_ranges.get('type') == 'find_daily_data':
-        sources = config['sources']
-        product_names = [source['product'] for source in sources]
-        output = list(_find_periods_with_data(index, product_names=product_names,
-                                              start_date=date_ranges['start_date'],
-                                              end_date=date_ranges['end_date']))
-    else:
-        raise StatsConfigurationError('Unknown date_ranges specification. Should be type=simple or '
-                                      'type=find_daily_data')
+        elif dr.get('type') == 'find_daily_data':
+            sources = config['sources']
+            product_names = [source['product'] for source in sources]
+            output = list(_find_periods_with_data(index, product_names=product_names,
+                                                  start_date=dr['start_date'],
+                                                  end_date=dr['end_date']))
+        else:
+            raise StatsConfigurationError('Unknown date_ranges specification. Should be type=simple or '
+                                          'type=find_daily_data')
+
+        return output
+
+    output = [parse(dr) for dr in date_ranges]
+
     _LOG.debug("Selecting data for date ranges: %s", output)
 
     if not output:
         raise StatsConfigurationError('Time period configuration results in 0 periods of interest.')
+
     return output
 
 

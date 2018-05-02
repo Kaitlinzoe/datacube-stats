@@ -21,7 +21,7 @@ DEFAULT_GROUP_BY = 'time'
 _LOG = logging.getLogger(__name__)
 
 
-def select_task_generator(input_region, storage, filter_product):
+def select_task_generator(input_region, storage, filter_product, date_ranges):
     if input_region is None or input_region == {}:
         _LOG.info('No input_region specified. Generating full available spatial region, gridded files.')
         return GriddedTaskGenerator(storage)

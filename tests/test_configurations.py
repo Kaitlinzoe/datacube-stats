@@ -1,7 +1,7 @@
-from pathlib import Path
-
 import pytest
 import yaml
+
+from pathlib import Path
 
 from datacube_stats.schema import stats_schema
 
@@ -31,6 +31,12 @@ config = yaml.safe_load("""
             reduction_function: mean
 """)
 
+MULTIPLE_DATE_RANGES = """
+    date_ranges:
+        - {'start_date': 2015-01-01, 'end_date': 2016-01-01}
+        - {'start_date': 2016-01-01, 'end_date': 2017-01-01}
+"""
+
 
 def test_sample_config(sample_stats_config):
     stats_schema(sample_stats_config)
@@ -45,3 +51,9 @@ def test_all_schemas(stats_config):
     with stats_config.open() as src:
         loaded_config = yaml.load(src)
         stats_schema(loaded_config)
+
+
+def test_multiple_date_ranges():
+    config = yaml.load(MULTIPLE_DATE_RANGES)
+    dates = config['date_ranges']
+    assert len(dates) == 2
