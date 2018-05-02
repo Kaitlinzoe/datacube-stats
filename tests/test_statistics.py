@@ -97,6 +97,23 @@ def test_new_geometric_median():
     assert (result.band1 == result.band2).all()
 
 
+def test_nanmedian():
+    from datacube_stats.statistics import TemporalNanMedian
+    from collections import OrderedDict
+
+    arr = np.random.random((5, 200, 100))
+    dataarray1 = xr.DataArray(arr, dims=('time', 'y', 'x'), coords={'time': list(range(5))})
+    dataarray2 = dataarray1.copy(deep=True)
+    dataset = xr.Dataset(data_vars={'band1': dataarray1, 'band2': dataarray2})
+
+    model = TemporalNanMedian()
+    result = model.postprocess(model.compute(model.preprocess(dataset)))
+
+    assert isinstance(result, xr.Dataset)
+    assert result.band1.dims == result.band2.dims
+    assert (result.band1 == result.band2).all()
+
+
 def test_new_med_ndwi():
     medndwi = NormalisedDifferenceStats('green', 'nir', 'ndwi', stats=['median'])
 

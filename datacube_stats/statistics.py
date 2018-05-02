@@ -3,24 +3,30 @@ Classes for performing statistical data analysis.
 """
 from __future__ import absolute_import
 
+import numpy as np
+import logging
+import xarray
 import abc
+import sys
+import os
+
 from collections import OrderedDict, Sequence
-from copy import copy
+from pkg_resources import iter_entry_points
+from typing import Iterable, Dict, Any
 from datetime import datetime
 from functools import partial
-from typing import Iterable, Dict, Any
-
-import numpy as np
-import xarray
-from pkg_resources import iter_entry_points
+from pydoc import locate
+from copy import copy
 
 from datacube.storage.masking import create_mask_value
 from datacube_stats.utils.dates import datetime64_to_inttime
 from .incremental_stats import (mk_incremental_sum, mk_incremental_or,
                                 compose_proc, broadcast_proc)
-from .utils import da_nodata, mk_masker, first_var
 from .stat_funcs import axisindex, argpercentile, _compute_medoid
 from .stat_funcs import anynan, section_by_index, medoid_indices
+from .utils import da_nodata, mk_masker, first_var
+
+LOG = logging.getLogger(__name__)
 
 
 class StatsConfigurationError(RuntimeError):
@@ -55,6 +61,7 @@ class Statistic(object):
 
         :rtype: list(dict)
         """
+        LOG.debug('Getting measurement information')
         output_measurements = [
             {attr: measurement[attr] for attr in ['name', 'dtype', 'nodata', 'units']}
             for measurement in input_measurements]
@@ -124,6 +131,59 @@ class ReducingXarrayStatistic(Statistic):
     def compute(self, data):
         func = getattr(xarray.Dataset, self._stat_func_name)
         return func(data, dim='time')
+
+
+class SquashedStatistic(Statistic):
+    """
+    Compute statistic by squashing data into a :class:`numpy.array` where the
+    data is scaled to [0,1) and stored as `float32`. The data is transposed so that 'variable'
+    and 'time' are the last two dimensions. The `compute` method must reduce on the 'time'
+    dimension.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.original_dims = None
+        self.squashed_dims = None
+        self.output_coords = None
+        self.names = None
+
+    def preprocess(self, data: xarray.Dataset) -> np.array:
+        LOG.debug('Converting Dataset to array')
+        self.names = list(data.data_vars)
+        self.original_dims = list(data.dims)
+        self.squashed_dims = [d for d in data.dims if (d != 'time') and (d != 'variable')] + ['variable', 'time']
+        self.output_coords = {c: v for c, v in data.coords.items() if (c != 'time') and (c != 'source')}
+        data = data.to_array(dim='variable').transpose(*self.squashed_dims).data
+        return data.astype(np.float32)/10000.
+
+    def postprocess(self, data: np.array) -> xarray.Dataset:
+        LOG.debug('Converting array to Dataset')
+        mask = np.isnan(data)
+        tmp = (data*10000.).astype(np.int16)
+        tmp[mask] = -999
+        da = xarray.DataArray(tmp, dims=self.squashed_dims[:-1], coords=self.output_coords)
+        outdims = ['variable'] + [d for d in self.original_dims if d != 'time']
+        ds = da.transpose(*outdims).to_dataset(dim='variable')
+        return ds.rename({i: v for i, v in enumerate(self.names)})
+
+    @abc.abstractmethod
+    def compute(self, data: np.array) -> np.array:
+        """
+        Calculate a temporal statistic on `data` that has axes (..., variable-axis, time-axis).
+        The statistic reduces on the time-axis and returns data of the form (..., variable-axis)
+        where ... represents spatial axes.
+        """
+
+
+class TemporalNanMedian(SquashedStatistic):
+    """
+    Compute a one-dimensional nanmedian along each band separately.
+    """
+
+    def compute(self, data):
+        LOG.info('Computing median')
+        return np.nanmedian(data, axis=3)
 
 
 class WofsStats(Statistic):
@@ -708,33 +768,30 @@ class Medoid(Statistic):
 class ExternalPlugin(Statistic):
     """
     Run externally defined plugin.
-
     """
 
     def __init__(self, impl, *args, **kwargs):
-        from pydoc import locate  # TODO: probably should use importlib, but this works so easily
-        import sys
-        import os
+        # Temporarily, add current path
+        sys.path.insert(0, os.getcwd())
 
-        sys.path.append(os.getcwd())
+        LOG.debug('Looking for external plugin `%s` in %s', impl, sys.path)
         impl_class = locate(impl)
+
+        # Remove the path that was added
+        sys.path = sys.path[1:]
 
         if impl_class is None:
             raise StatsProcessingError("Failed to load external plugin: '{}'".format(impl))
 
-        self._impl = impl_class(*args, **kwargs)
+        self.impl = impl_class(*args, **kwargs)
+        LOG.debug('Found it!')
 
     def compute(self, data):
-        return self._impl.compute(data)
+        return self.impl.compute(data)
 
-    def measurements(self, input_measurements):
-        return self._impl.measurements(input_measurements)
-
-    def is_iterative(self):
-        return self._impl.is_iterative()
-
-    def make_iterative_proc(self):
-        return self._impl.make_iterative_proc()
+    def __getattr__(self, name):
+        # If attribute not on current object, try to find it on implementation
+        return getattr(self.impl, name)
 
 
 class MaskMultiCounter(Statistic):
