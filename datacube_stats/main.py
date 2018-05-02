@@ -885,7 +885,10 @@ def _configure_date_ranges(index, config):
     if not output:
         raise StatsConfigurationError('Time period configuration results in 0 periods of interest.')
 
-    return output
+    # temporarily disable multiple date ranges
+    #return output
+
+    return output[0]
 
 
 if __name__ == '__main__':
