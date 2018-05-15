@@ -4,6 +4,8 @@ Useful utilities used in Stats
 import itertools
 import pickle
 import functools
+import logging
+
 from typing import Dict, Iterator, Tuple, Iterable, Any
 
 import cloudpickle
@@ -18,6 +20,8 @@ from datacube.api.query import Query
 from datacube.storage.masking import mask_invalid_data, create_mask_value
 from datacube.api import Tile
 from datacube.model import Range
+
+LOG = logging.getLogger(__name__)
 
 
 def tile_iter(tile: Tile, chunk_size: Dict[str, int]) -> Iterator[Tuple[None, slice, slice]]:
@@ -208,6 +212,10 @@ def cast_back(data: xarray.Dataset, measurements: Iterable[Dict[str, Any]]) -> x
                     for measurement in measurements}
 
     data_vars = [name for name in data.data_vars]
+
+    LOG.debug('cast_back: data_vars %s measurements %s', set(data_vars), set(measurements.keys()))
+    LOG.debug('data: %s', data)
+
     assert set(data_vars) == set(measurements.keys())
 
     def cast(da):

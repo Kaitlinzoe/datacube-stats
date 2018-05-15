@@ -176,7 +176,9 @@ def main(index, stats_config_file, qsub, runner, save_tasks, load_tasks,
             raise click.ClickException('%s of %s tasks not completed successfully.' % (failed, successful + failed))
 
     except Exception as e:
+        import traceback
         _LOG.error(e)
+        print(traceback.format_exc())
         sys.exit(1)
 
     return 0

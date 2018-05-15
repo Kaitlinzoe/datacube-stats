@@ -786,11 +786,20 @@ class ExternalPlugin(Statistic):
         self.impl = impl_class(*args, **kwargs)
         LOG.debug('Found it!')
 
+    def is_iterative(self) -> bool:
+        return self.impl.is_iterative()
+
+    def make_iterative_proc(self):
+        return self.impl.make_iterative_proc()
+
+    def measurements(self, input_measurements: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
+        return self.impl.measurements(input_measurements)
+
     def compute(self, data):
         return self.impl.compute(data)
 
     def __getattr__(self, name):
-        # If attribute not on current object, try to find it on implementation
+        # If attribute not on current object or on Statistic, try to find it on implementation
         return getattr(self.impl, name)
 
 
