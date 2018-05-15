@@ -9,9 +9,9 @@ import sys
 import os
 
 from collections import OrderedDict, Sequence
-from typing import Dict, Iterable, Any
 from functools import partial
 from datetime import datetime
+from typing import Iterable
 from pydoc import locate
 from copy import copy
 
